@@ -1,9 +1,10 @@
-#include "mpi.h"
 #include <assert.h>
 #include <math.h>
+#include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 double T_x_0_boundaryconditions(int xi, int nx)
 {
@@ -21,54 +22,27 @@ double T_x_pi_boundaryconditions(int xi, int nx)
     return sin(((double)xi + 0.5) / ((double)nx) * M_PI) * sin(((double)xi + 0.5) / ((double)nx) * M_PI);
 }
 
-void* safemalloc(size_t size)
-{
-    void* ptr = malloc(size);
-    if (ptr == NULL) {
-        fprintf(stderr, "Malloc failed. Exiting...\n");
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-    return ptr;
-}
-
-double** grid_creator(const int nx, const int n)
+double** grid_creator(const size_t nx, const size_t n)
 {
     /*Create the array to store the temperatures*/
 
-    double** pointer;
-    pointer = safemalloc((size_t)nx * sizeof(double*));
-
-    for (int i = 0; i < nx; i++) {
-        pointer[i] = safemalloc((size_t)n * sizeof(double));
+    auto pointer = new double*[nx];
+    for (size_t i = 0; i < nx; i++) {
+        pointer[i] = new double[n];
     }
 
     return pointer;
-}
-
-void grid_destroyer(double** pointer, const int nx)
-{
-    //free memory at the end
-    for (int i = 0; i < nx; i++) {
-        free(pointer[i]);
-    }
-    free(pointer);
 }
 
 int stepper(double** T, double** T2, const int nx, const double dx, const double dt, const int ncols, const int rank)
 {
     /*Step things forward one step in time.*/
 
+    double adjacent[4];
     for (int i = 0; i < nx; i++) //which row, y
     {
         for (int j = 1; j < (ncols + 2 - 1); j++) //which column, x
         {
-            double* adjacent = malloc(4 * sizeof(double)); //Store the temperatures adjacent to the cell being focused on for later calculation
-            if (adjacent == NULL) {
-                fprintf(stderr, "Malloc did not work.  Now exiting...\n");
-                MPI_Finalize();
-                exit(1);
-            }
-
             if (i == 0) //corresponds to the top
             {
                 adjacent[0] = T_x_pi_boundaryconditions((rank * ncols + j - 1), nx);
@@ -88,14 +62,13 @@ int stepper(double** T, double** T2, const int nx, const double dx, const double
             adjacent[3] = T[i][j - 1];
 
             T2[i][j] = T[i][j] + dt / (dx * dx) * (adjacent[0] + adjacent[1] + adjacent[2] + adjacent[3] - 4. * T[i][j]);
-            free(adjacent); //calculate the new temperature for the cell
         }
     }
 
     return 0;
 }
 
-void initial_message(char* name, int rank)
+[[noreturn]] void initial_message(char* name, int rank)
 {
     //runs if the wrong number of input parameters was entered
     if (rank == 0) {
@@ -104,6 +77,13 @@ void initial_message(char* name, int rank)
     }
     MPI_Finalize();
     exit(1);
+}
+
+char* get_time(void)
+{
+    time_t rawtime;
+    time(&rawtime);
+    return ctime(&rawtime);
 }
 
 int main(int argc, char* argv[])
@@ -140,7 +120,6 @@ int main(int argc, char* argv[])
 
     MPI_Request reqs[4]; //checkers for use later during the actual MPI part
     MPI_Status stats[4];
-    MPI_Status stats2[2];
 
     int check; /*used for checking outputs to make sure they are good*/
     double** T_arr; /*This will be a pointer to an array of pointers which will host the grid itself*/
@@ -158,8 +137,8 @@ int main(int argc, char* argv[])
     const int tag1 = 1; //tags for the MPI
     const int tag2 = 2; //tags for the MPI
 
-    T_arr = grid_creator(nx, (ncols + 2)); //allocate memory for the temperature grids.
-    T_arr_2 = grid_creator(nx, (ncols + 2)); //We use ncols+2 to provide some ghost cells for holding the boundary temperature values
+    T_arr = grid_creator((size_t)nx, (size_t)(ncols + 2)); //allocate memory for the temperature grids.
+    T_arr_2 = grid_creator((size_t)nx, (size_t)(ncols + 2)); //We use ncols+2 to provide some ghost cells for holding the boundary temperature values
 
     //Now initialize the array to the initial conditions
     //Our initial conditions are to have T=0 everywhere
@@ -171,6 +150,9 @@ int main(int argc, char* argv[])
     }
 
     for (int i = 0; i < ntstep; i++) {
+        if (rank == 0 && i % (ntstep / 100) == 0) {
+            printf("[%.19s] Computing step %d/%d\n", get_time(), i, ntstep);
+        }
         //pass the boundary columns between the various threads, this arrays are useful to do that
         double right_pass[nx], left_pass[nx], right_accept[nx], left_accept[nx];
 
@@ -229,8 +211,6 @@ int main(int argc, char* argv[])
 
     if (!(fp = fopen(outputfilename, "w"))) {
         printf("Output file isn't opening for saving.  Now quitting...\n");
-        grid_destroyer(T_arr, nx);
-        grid_destroyer(T_arr_2, nx);
         MPI_Finalize();
         exit(1);
     }
@@ -246,10 +226,6 @@ int main(int argc, char* argv[])
         fprintf(fp, "\n");
     }
     fclose(fp);
-
-    //free the memory
-    grid_destroyer(T_arr, nx);
-    grid_destroyer(T_arr_2, nx);
 
     MPI_Finalize();
 
