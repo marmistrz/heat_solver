@@ -85,7 +85,7 @@ int stepper(double** T, double** T2, const int nx, const double dx, const double
 
 string get_time(void)
 {
-    return date::format("[%T] ", std::chrono::system_clock::now());
+    return date::format("[%T]", std::chrono::system_clock::now());
 }
 
 int main(int argc, char* argv[])
@@ -153,7 +153,10 @@ int main(int argc, char* argv[])
 
     for (int i = 0; i < ntstep; i++) {
         if (rank == 0 && i % (ntstep / 1000) == 0) {
-            printf("%s Computing step %d/%d\n", get_time().c_str(), i, ntstep);
+            double progress = 100.0 * i / (double)ntstep;
+            printf("%s Progress: %.1f%%"
+                   ". Computing step %d/%d\n",
+                get_time().c_str(), progress, i, ntstep);
         }
         //pass the boundary columns between the various threads, this arrays are useful to do that
         double right_pass[nx], left_pass[nx], right_accept[nx], left_accept[nx];
