@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
     }
 
     for (int i = 0; i < ntstep; i++) {
-        if (rank == 0 && i % (ntstep / 1000) == 0) {
+        if (rank == 0 && i % (ntstep / 200) == 0) {
             double progress = 100.0 * i / (double)ntstep;
             printf("%s Progress: %.1f%%"
                    ". Computing step %d/%d\n",
