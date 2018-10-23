@@ -232,10 +232,9 @@ int main(int argc, char* argv[])
     }
     fclose(fp);
 
-    MPI_Finalize();
-
     //Print how long this run took, for this rank
     printf("numtasks: %d, rank: %d, nx: %d, time: %lf\n", numtasks, rank, nx, MPI_Wtime() - start_time);
+    MPI_Finalize();
 
     return 0;
 }
