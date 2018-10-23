@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
     }
 
     for (int i = 0; i < ntstep; i++) {
-        if (rank == 0 && i % (ntstep / 100) == 0) {
+        if (rank == 0 && i % (ntstep / 1000) == 0) {
             printf("%s Computing step %d/%d\n", get_time().c_str(), i, ntstep);
         }
         //pass the boundary columns between the various threads, this arrays are useful to do that
