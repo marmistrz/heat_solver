@@ -21,33 +21,25 @@ double T_x_pi_boundaryconditions(int xi, int nx)
     return sin(((double)xi + 0.5) / ((double)nx) * M_PI) * sin(((double)xi + 0.5) / ((double)nx) * M_PI);
 }
 
+void* safemalloc(size_t size)
+{
+    void* ptr = malloc(size);
+    if (ptr == NULL) {
+        fprintf(stderr, "Malloc failed. Exiting...\n");
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    return ptr;
+}
+
 double** grid_creator(const int nx, const int n)
 {
     /*Create the array to store the temperatures*/
 
     double** pointer;
-
-    pointer = malloc(nx * sizeof(double*));
-    if (pointer == NULL) //if the memory wasn't allocated
-    {
-        fprintf(stderr, "Malloc did not work.  Now exiting...\n");
-        MPI_Finalize();
-        exit(1);
-    }
+    pointer = safemalloc((size_t)nx * sizeof(double*));
 
     for (int i = 0; i < nx; i++) {
-
-        pointer[i] = malloc(n * sizeof(double));
-        if (pointer[i] == NULL) //if the memory for a particular row wasn't allocated
-        {
-            fprintf(stderr, "Malloc did not work.  Now exiting...\n");
-            for (int j = 0; j < i; j++) {
-                free(pointer[j]); //free all the previous successfully allocated rows
-            }
-            free(pointer[i]); //free the array of pointers
-            MPI_Finalize();
-            exit(1);
-        }
+        pointer[i] = safemalloc((size_t)n * sizeof(double));
     }
 
     return pointer;
@@ -103,11 +95,14 @@ int stepper(double** T, double** T2, const int nx, const double dx, const double
     return 0;
 }
 
-void initial_message(char* name)
+void initial_message(char* name, int rank)
 {
     //runs if the wrong number of input parameters was entered
-    printf("Usage: %s <nx>  \n", name);
-    printf("  nx:    grid size on a side\n         final grid will be 2-d sized nx by nx\n");
+    if (rank == 0) {
+        printf("Usage: %s <nx>  \n", name);
+        printf("  nx:    grid size on a side\n         final grid will be 2-d sized nx by nx\n");
+    }
+    MPI_Finalize();
     exit(1);
 }
 
@@ -116,10 +111,6 @@ int main(int argc, char* argv[])
 
     double start_time = MPI_Wtime(); //we're timing this run
 
-    if (argc != 2) {
-        initial_message(argv[0]);
-    }
-
     /*Initialize MPI*/
     int rc;
     rc = MPI_Init(&argc, &argv);
@@ -127,11 +118,14 @@ int main(int argc, char* argv[])
         printf("Error starting MPI program.  Now quitting\n");
         MPI_Abort(MPI_COMM_WORLD, rc);
     }
-
     int numtasks, rank;
 
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks); //the number of tasks, number of processors to use
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); //the rank of this process
+
+    if (argc != 2) {
+        initial_message(argv[0], rank);
+    }
 
     const int nx = atoi(argv[1]); //size of array
 
