@@ -1,10 +1,14 @@
-#include <assert.h>
-#include <math.h>
+#include <cassert>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 #include <mpi.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+
+using namespace std;
+
+#include "date.h"
 
 double T_x_0_boundaryconditions(int xi, int nx)
 {
@@ -79,11 +83,9 @@ int stepper(double** T, double** T2, const int nx, const double dx, const double
     exit(1);
 }
 
-char* get_time(void)
+string get_time(void)
 {
-    time_t rawtime;
-    time(&rawtime);
-    return ctime(&rawtime);
+    return date::format("[%T] ", std::chrono::system_clock::now());
 }
 
 int main(int argc, char* argv[])
@@ -151,7 +153,7 @@ int main(int argc, char* argv[])
 
     for (int i = 0; i < ntstep; i++) {
         if (rank == 0 && i % (ntstep / 100) == 0) {
-            printf("[%.19s] Computing step %d/%d\n", get_time(), i, ntstep);
+            printf("%s Computing step %d/%d\n", get_time().c_str(), i, ntstep);
         }
         //pass the boundary columns between the various threads, this arrays are useful to do that
         double right_pass[nx], left_pass[nx], right_accept[nx], left_accept[nx];

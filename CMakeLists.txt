@@ -3,4 +3,6 @@ set(CMAKE_CXX_COMPILER "mpicxx")
 set(CMAKE_CXX_FLAGS "-Ofast -Wall -Wextra -pedantic -Wno-vla")
 
 project(heat_solver)
-add_executable(${PROJECT_NAME} "main.cpp")
+set(HEADERS
+    date.h)
+add_executable(${PROJECT_NAME} "main.cpp" ${HEADERS})
