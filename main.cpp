@@ -16,7 +16,7 @@ double T_x_0_boundaryconditions(int xi, int nx)
     /*This is the boundary condition along the "bottom" of the grid, where y=0*/
     /*xi is the index of x*/
 
-    return cos(((double)xi + 0.5) / ((double)nx) * M_PI) * cos(((double)xi + 0.5) / ((double)nx) * M_PI);
+    return cos(((double) xi + 0.5) / ((double) nx) * M_PI) * cos(((double) xi + 0.5) / ((double) nx) * M_PI);
 }
 
 double T_x_pi_boundaryconditions(int xi, int nx)
@@ -24,7 +24,7 @@ double T_x_pi_boundaryconditions(int xi, int nx)
     /*This is the boundary condition along the "top" of the grid, where y=pi*/
     /*xi is the index of x*/
 
-    return sin(((double)xi + 0.5) / ((double)nx) * M_PI) * sin(((double)xi + 0.5) / ((double)nx) * M_PI);
+    return sin(((double) xi + 0.5) / ((double) nx) * M_PI) * sin(((double) xi + 0.5) / ((double) nx) * M_PI);
 }
 
 double** grid_creator(const size_t nx, const size_t n)
@@ -137,7 +137,7 @@ int main(int argc, char* argv[])
     double** T_arr_2; /*This will be used to calculate the new T values at each time step while keeping the old values in T_arr for calculation purposes*/
     double** T_pointer_temp; /*To be used to switch the pointers T_arr and T_arr_2*/
     const double fraction_of_maximum_time_step = 0.8; /*This is the fraction of the largest numerically stable timestep, calculated below, that we want our dt to actually be.  Keeping it some sane fraction will allow us to get an exact fraction of the maximum time we want. In units of kappa*/
-    const double dx = M_PI / (double)nx; //physical size of grid cells
+    const double dx = M_PI / (double) nx; //physical size of grid cells
     const double dt = dx * dx / 4.0 * fraction_of_maximum_time_step; /*This is the time step size, in units of kappa, which later cancel*/
     const double tmax = (0.5 * M_PI * M_PI); //maximum time to run
     const int ntstep = req_steps.value_or(static_cast<int>(tmax / dt)); //number of time steps
@@ -148,8 +148,8 @@ int main(int argc, char* argv[])
     const int tag1 = 1; //tags for the MPI
     const int tag2 = 2; //tags for the MPI
 
-    T_arr = grid_creator((size_t)nx, (size_t)(ncols + 2)); //allocate memory for the temperature grids.
-    T_arr_2 = grid_creator((size_t)nx, (size_t)(ncols + 2)); //We use ncols+2 to provide some ghost cells for holding the boundary temperature values
+    T_arr = grid_creator((size_t) nx, (size_t)(ncols + 2)); //allocate memory for the temperature grids.
+    T_arr_2 = grid_creator((size_t) nx, (size_t)(ncols + 2)); //We use ncols+2 to provide some ghost cells for holding the boundary temperature values
 
     //Now initialize the array to the initial conditions
     //Our initial conditions are to have T=0 everywhere
@@ -162,7 +162,7 @@ int main(int argc, char* argv[])
 
     for (int i = 0; i < ntstep; i++) {
         if (rank == 0 && i % (ntstep / 200) == 0) {
-            double progress = 100.0 * i / (double)ntstep;
+            double progress = 100.0 * i / (double) ntstep;
             printf("%s Progress: %.1f%%"
                    ". Computing step %d/%d\n",
                 get_time().c_str(), progress, i, ntstep);
