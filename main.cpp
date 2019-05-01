@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <optional>
 #include <mpi.h>
 
 using namespace std;
@@ -76,8 +77,9 @@ int stepper(double** T, double** T2, const int nx, const double dx, const double
 {
     //runs if the wrong number of input parameters was entered
     if (rank == 0) {
-        printf("Usage: %s <nx>  \n", name);
+        printf("Usage: %s nx [steps] \n", name);
         printf("  nx:    grid size on a side\n         final grid will be 2-d sized nx by nx\n");
+        printf("  steps: (optional) numer of steps of the simulation. If not given, will be determined automatically");
     }
     MPI_Finalize();
     exit(1);
@@ -105,11 +107,18 @@ int main(int argc, char* argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks); //the number of tasks, number of processors to use
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); //the rank of this process
 
-    if (argc != 2) {
+    if (argc != 2 && argc != 3) {
         initial_message(argv[0], rank);
     }
 
     const int nx = atoi(argv[1]); //size of array
+    optional<int> req_steps;
+    if (argc == 3) {
+        auto val = atoi(argv[2]);
+        req_steps = make_optional(val);
+    } else {
+        req_steps = nullopt;
+    }
 
     if (rank == 0 && nx % numtasks != 0) {
         /*Make sure the required grid size splits evenly between the number of processors*/
@@ -131,7 +140,7 @@ int main(int argc, char* argv[])
     const double dx = M_PI / (double)nx; //physical size of grid cells
     const double dt = dx * dx / 4.0 * fraction_of_maximum_time_step; /*This is the time step size, in units of kappa, which later cancel*/
     const double tmax = (0.5 * M_PI * M_PI); //maximum time to run
-    const int ntstep = (int)(tmax / dt); //number of time steps
+    const int ntstep = req_steps.value_or(static_cast<int>(tmax / dt)); //number of time steps
 
     const int prev = (rank == 0) ? numtasks - 1 : rank - 1; //define the rank number of previous
     const int next = (rank == (numtasks - 1)) ? 0 : rank + 1; //and next processor
