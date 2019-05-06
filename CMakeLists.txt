@@ -5,5 +5,6 @@ set(CMAKE_CXX_FLAGS "-Ofast -Wall -Wextra -pedantic -Wno-vla")
 
 project(heat_solver)
 set(HEADERS
-    date.h)
+    date.h
+    CLI11.hpp)
 add_executable(${PROJECT_NAME} "main.cpp" ${HEADERS})

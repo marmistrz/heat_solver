@@ -10,9 +10,13 @@
 #include <limits>
 #include <mpi.h>
 
+#include "date.h"
+#include "CLI11.hpp"
+
 using namespace std;
 
-#include "date.h"
+
+#define _unused(x) ((void)(x))
 
 double T_x_0_boundaryconditions(int xi, int nx)
 {
@@ -93,11 +97,12 @@ string get_time(void)
     return date::format("[%T]", std::chrono::system_clock::now());
 }
 
-void write_to_file(double ** T_arr, int ncols, int nx, const char* const outputfilename)
+void write_to_file(double** T_arr, int ncols, int nx, const char* const outputfilename)
 {
     ofstream ofile(outputfilename);
-    ofile << "#Final temperature stored in grid format, MPI style\n" <<
-        "#Columns represent the rows in the actual grid and vice-versa.  This is so that each separate rank's file can easily be appended to the others to produce a full file.\n";
+    ofile.exceptions(fstream::failbit | fstream::badbit);
+    ofile << "#Final temperature stored in grid format, MPI style\n"
+          << "#Columns represent the rows in the actual grid and vice-versa.  This is so that each separate rank's file can easily be appended to the others to produce a full file.\n";
     auto digits = numeric_limits<double>::digits10;
 
     //print the data to file
@@ -109,23 +114,30 @@ void write_to_file(double ** T_arr, int ncols, int nx, const char* const outputf
     }
 }
 
-void read_from_file(double** T_arr, int ncols, int nx, const char* const inputfile)
+void read_from_file(double** T_arr, int ncols, int nx, const string& inputfile, int rank)
 {
     ifstream ifile(inputfile);
+    ifile.exceptions(fstream::failbit | fstream::badbit);
     // skip comments
     while (ifile.peek() == '#') {
+        ifile.ignore(numeric_limits<streamsize>::max(), '\n');
+    }
+
+    // ignore the lines for previous ranks
+    for (int i = 0; i < ncols * rank; ++i) {
         ifile.ignore(numeric_limits<streamsize>::max(), '\n');
     }
 
     // read the data
     for (int i = 1; i < (ncols + 2 - 1); i++) {
         for (int j = 0; j < nx; j++) {
-            cin >> T_arr[j][i]; //For a fixed column all the elements get printed horizontally in the file.
+            ifile >> T_arr[j][i]; //For a fixed column all the elements get printed horizontally in the file.
         }
     }
 }
 
-void zeroize_matrix(double** T_arr, int ncols, int nx) {
+void zeroize_matrix(double** T_arr, int ncols, int nx)
+{
     for (int i = 0; i < nx; i++) {
         for (int j = 1; j < (ncols + 2 - 1); j++) {
             T_arr[i][j] = 0.0;
@@ -139,8 +151,7 @@ int main(int argc, char* argv[])
     double start_time = MPI_Wtime(); //we're timing this run
 
     /*Initialize MPI*/
-    int rc;
-    rc = MPI_Init(&argc, &argv);
+    int rc = MPI_Init(&argc, &argv);
     if (rc != MPI_SUCCESS) {
         printf("Error starting MPI program.  Now quitting\n");
         MPI_Abort(MPI_COMM_WORLD, rc);
@@ -150,23 +161,23 @@ int main(int argc, char* argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks); //the number of tasks, number of processors to use
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); //the rank of this process
 
-    if (argc != 2 && argc != 3) {
-        initial_message(argv[0], rank);
-    }
-
-    const int nx = atoi(argv[1]); //size of array
     optional<int> req_steps;
-    if (argc == 3) {
-        auto val = atoi(argv[2]);
-        req_steps = make_optional(val);
-    } else {
-        req_steps = nullopt;
+    optional<string> initial;
+    int nx;
+    CLI::App app;
+    app.add_option("--size", nx, "size of the grid");
+    app.add_option("--initial", initial, "inital conditions")->required(true);
+    app.add_option("--steps", req_steps, "steps to simulate");
+
+    try {
+        app.parse(argc, argv);
+    } catch (const CLI::ParseError& e) {
+        return app.exit(e);
     }
 
     if (rank == 0 && nx % numtasks != 0) {
         /*Make sure the required grid size splits evenly between the number of processors*/
         printf("Your chosen nx does not divide nicely into your chosen number of threads.\n Change the code or your arguments.  Now quitting...\n");
-        MPI_Finalize();
         exit(1);
     }
 
@@ -197,7 +208,17 @@ int main(int argc, char* argv[])
     //Now initialize the array to the initial conditions
     //Our initial conditions are to have T=0 everywhere
 
-    zeroize_matrix(T_arr, ncols, nx);
+    if (initial.has_value()) {
+        string& file = initial.value();
+        try {
+            read_from_file(T_arr, ncols, nx, file, rank);
+        } catch (const exception& e) {
+            cerr << "Error reading file " << file << ": " << e.what() << "\n";
+            exit(1);
+        }
+    } else {
+        zeroize_matrix(T_arr, ncols, nx);
+    }
 
     for (int i = 0; i < ntstep; i++) {
         if (rank == 0 && ntstep >= 200 && i % (ntstep / 200) == 0) {
@@ -240,6 +261,7 @@ int main(int argc, char* argv[])
 
         check = stepper(T_arr, T_arr_2, nx, dx, dt, ncols, rank); //step forward one time step
         assert(check == 0);
+        _unused(check);
 
         /*The following switches the pointers T_arr and T_arr_2, making T_arr now equal to the newly updated array formerly pointed to by T_arr_2 and giving the T_arr_2 pointer the old array*/
         T_pointer_temp = T_arr_2;
@@ -260,7 +282,12 @@ int main(int argc, char* argv[])
     strcat(outputfilename, stringtemp);
     strcat(outputfilename, ".output.dat");
 
-    write_to_file(T_arr, ncols, nx, outputfilename);
+    try {
+        write_to_file(T_arr, ncols, nx, outputfilename);
+    } catch (const exception& e) {
+        cerr << "Error reading file " << outputfilename << ": " << e.what() << "\n";
+        exit(1);
+    }
 
     //Print how long this run took, for this rank
     printf("numtasks: %d, rank: %d, nx: %d, time: %lf\n", numtasks, rank, nx, MPI_Wtime() - start_time);
