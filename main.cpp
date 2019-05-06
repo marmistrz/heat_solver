@@ -1,13 +1,10 @@
 #include <cassert>
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <ctime>
 #include <optional>
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <sstream>
 #include <mpi.h>
 
 #include "date.h"
@@ -15,8 +12,7 @@
 
 using namespace std;
 
-
-#define _unused(x) ((void)(x))
+#define _unused(x) ((void) (x))
 
 double T_x_0_boundaryconditions(int xi, int nx)
 {
@@ -97,12 +93,16 @@ string get_time(void)
     return date::format("[%T]", std::chrono::system_clock::now());
 }
 
-void write_to_file(double** T_arr, int ncols, int nx, const char* const outputfilename)
+void write_to_file(double** T_arr, int ncols, int nx, const string& outputfilename, bool append)
 {
-    ofstream ofile(outputfilename);
+    auto mode = append ? ios_base::app : ios_base::trunc;
+    ofstream ofile(outputfilename, mode);
     ofile.exceptions(fstream::failbit | fstream::badbit);
-    ofile << "#Final temperature stored in grid format, MPI style\n"
-          << "#Columns represent the rows in the actual grid and vice-versa.  This is so that each separate rank's file can easily be appended to the others to produce a full file.\n";
+    if (!append) {
+        // write the header
+        ofile << "#Final temperature stored in grid format, MPI style\n"
+              << "#Columns represent the rows in the actual grid and vice-versa.  This is so that each separate rank's file can easily be appended to the others to produce a full file.\n";
+    }
     auto digits = numeric_limits<double>::digits10;
 
     //print the data to file
@@ -269,28 +269,34 @@ int main(int argc, char* argv[])
         T_arr = T_pointer_temp;
     }
 
-    /*Save this rank's portion of the answer to file*/
-    char outputfilename[120] = "heat_mpi."; //name of save file
-    char stringtemp[120];
-    sprintf(stringtemp, "%d", nx);
-    strcat(outputfilename, stringtemp);
-    strcat(outputfilename, ".");
-    sprintf(stringtemp, "%d", numtasks);
-    strcat(outputfilename, stringtemp);
-    strcat(outputfilename, ".rank.");
-    sprintf(stringtemp, "%d", rank);
-    strcat(outputfilename, stringtemp);
-    strcat(outputfilename, ".output.dat");
-
-    try {
-        write_to_file(T_arr, ncols, nx, outputfilename);
-    } catch (const exception& e) {
-        cerr << "Error reading file " << outputfilename << ": " << e.what() << "\n";
-        exit(1);
-    }
-
     //Print how long this run took, for this rank
     printf("numtasks: %d, rank: %d, nx: %d, time: %lf\n", numtasks, rank, nx, MPI_Wtime() - start_time);
+
+    // Write the outputs
+    ostringstream fname_ss;
+    fname_ss << "heat_mpi." << nx << "." << numtasks << ".output.dat";
+    string filename = fname_ss.str();
+
+    if (rank == 0) {
+        try {
+            write_to_file(T_arr, ncols, nx, filename, false);
+            for (int rank2 = 1; rank2 < numtasks; ++rank2) {
+                for (int i = 0; i < nx; ++i) {
+                    MPI_Recv(T_arr[i], ncols, MPI_DOUBLE, rank2, 0, MPI_COMM_WORLD, nullptr);
+                }
+                write_to_file(T_arr, ncols, nx, filename, true);
+            }
+        } catch (const exception& e) {
+            cerr << "Error reading file " << filename << ": " << e.what() << "\n";
+            exit(1);
+        }
+
+    } else {
+        for (int i = 0; i < nx; ++i) {
+            MPI_Send(T_arr[i], ncols, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        }
+    }
+
     MPI_Finalize();
 
     return 0;
