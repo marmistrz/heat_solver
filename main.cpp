@@ -5,6 +5,9 @@
 #include <cstring>
 #include <ctime>
 #include <optional>
+#include <fstream>
+#include <iomanip>
+#include <limits>
 #include <mpi.h>
 
 using namespace std;
@@ -90,6 +93,46 @@ string get_time(void)
     return date::format("[%T]", std::chrono::system_clock::now());
 }
 
+void write_to_file(double ** T_arr, int ncols, int nx, const char* const outputfilename)
+{
+    ofstream ofile(outputfilename);
+    ofile << "#Final temperature stored in grid format, MPI style\n" <<
+        "#Columns represent the rows in the actual grid and vice-versa.  This is so that each separate rank's file can easily be appended to the others to produce a full file.\n";
+    auto digits = numeric_limits<double>::digits10;
+
+    //print the data to file
+    for (int i = 1; i < (ncols + 2 - 1); i++) {
+        for (int j = 0; j < nx; j++) {
+            ofile << setprecision(digits) << fixed << T_arr[j][i] << "\t"; //For a fixed column all the elements get printed horizontally in the file.
+        }
+        ofile << "\n";
+    }
+}
+
+void read_from_file(double** T_arr, int ncols, int nx, const char* const inputfile)
+{
+    ifstream ifile(inputfile);
+    // skip comments
+    while (ifile.peek() == '#') {
+        ifile.ignore(numeric_limits<streamsize>::max(), '\n');
+    }
+
+    // read the data
+    for (int i = 1; i < (ncols + 2 - 1); i++) {
+        for (int j = 0; j < nx; j++) {
+            cin >> T_arr[j][i]; //For a fixed column all the elements get printed horizontally in the file.
+        }
+    }
+}
+
+void zeroize_matrix(double** T_arr, int ncols, int nx) {
+    for (int i = 0; i < nx; i++) {
+        for (int j = 1; j < (ncols + 2 - 1); j++) {
+            T_arr[i][j] = 0.0;
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
 
@@ -154,14 +197,10 @@ int main(int argc, char* argv[])
     //Now initialize the array to the initial conditions
     //Our initial conditions are to have T=0 everywhere
 
-    for (int i = 0; i < nx; i++) {
-        for (int j = 1; j < (ncols + 2 - 1); j++) {
-            T_arr[i][j] = 0.0;
-        }
-    }
+    zeroize_matrix(T_arr, ncols, nx);
 
     for (int i = 0; i < ntstep; i++) {
-        if (rank == 0 && i % (ntstep / 200) == 0) {
+        if (rank == 0 && ntstep >= 200 && i % (ntstep / 200) == 0) {
             double progress = 100.0 * i / (double) ntstep;
             printf("%s Progress: %.1f%%"
                    ". Computing step %d/%d\n",
@@ -208,8 +247,6 @@ int main(int argc, char* argv[])
         T_arr = T_pointer_temp;
     }
 
-    FILE* fp;
-
     /*Save this rank's portion of the answer to file*/
     char outputfilename[120] = "heat_mpi."; //name of save file
     char stringtemp[120];
@@ -223,23 +260,7 @@ int main(int argc, char* argv[])
     strcat(outputfilename, stringtemp);
     strcat(outputfilename, ".output.dat");
 
-    if (!(fp = fopen(outputfilename, "w"))) {
-        printf("Output file isn't opening for saving.  Now quitting...\n");
-        MPI_Finalize();
-        exit(1);
-    }
-
-    fprintf(fp, "#Final temperature stored in grid format, MPI style\n");
-    fprintf(fp, "#Columns represent the rows in the actual grid and vice-versa.  This is so that each separate rank's file can easily be appended to the others to produce a full file.\n");
-
-    //print the data to file
-    for (int i = 1; i < (ncols + 2 - 1); i++) {
-        for (int j = 0; j < nx; j++) {
-            fprintf(fp, "%e     ", T_arr[j][i]); //For a fixed column all the elements get printed horizontally in the file.
-        }
-        fprintf(fp, "\n");
-    }
-    fclose(fp);
+    write_to_file(T_arr, ncols, nx, outputfilename);
 
     //Print how long this run took, for this rank
     printf("numtasks: %d, rank: %d, nx: %d, time: %lf\n", numtasks, rank, nx, MPI_Wtime() - start_time);
