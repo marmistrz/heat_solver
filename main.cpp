@@ -162,8 +162,8 @@ int main(int argc, char* argv[])
     optional<string> initial;
     int nx;
     CLI::App app;
-    app.add_option("--size", nx, "size of the grid");
-    app.add_option("--initial", initial, "inital conditions")->required(true);
+    app.add_option("--size", nx, "size of the grid")->required(true);
+    app.add_option("--initial", initial, "inital conditions");
     app.add_option("--steps", req_steps, "steps to simulate");
 
     try {
