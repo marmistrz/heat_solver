@@ -14,23 +14,29 @@ using namespace std;
 
 #define _unused(x) ((void) (x))
 
-double T_x_0_boundaryconditions(int xi, int nx)
+static double T_x_0_boundaryconditions(int xi, int nx)
 {
     /*This is the boundary condition along the "bottom" of the grid, where y=0*/
     /*xi is the index of x*/
+    auto xi_d = static_cast<double>(xi);
+    auto nx_d = static_cast<double>(nx);
 
-    return cos(((double) xi + 0.5) / ((double) nx) * M_PI) * cos(((double) xi + 0.5) / ((double) nx) * M_PI);
+    auto cosine = cos((xi_d + 0.5) / nx_d * M_PI);
+    return cosine * cosine;
 }
 
-double T_x_pi_boundaryconditions(int xi, int nx)
+static double T_x_pi_boundaryconditions(int xi, int nx)
 {
     /*This is the boundary condition along the "top" of the grid, where y=pi*/
     /*xi is the index of x*/
+    auto xi_d = static_cast<double>(xi);
+    auto nx_d = static_cast<double>(nx);
 
-    return sin(((double) xi + 0.5) / ((double) nx) * M_PI) * sin(((double) xi + 0.5) / ((double) nx) * M_PI);
+    auto sine = sin((xi_d + 0.5) / nx_d * M_PI);
+    return sine * sine;
 }
 
-double** grid_creator(const size_t nx, const size_t n)
+static double** grid_creator(const size_t nx, const size_t n)
 {
     /*Create the array to store the temperatures*/
 
@@ -42,7 +48,7 @@ double** grid_creator(const size_t nx, const size_t n)
     return pointer;
 }
 
-int stepper(double** T, double** T2, const int nx, const double dx, const double dt, const int ncols, const int rank)
+static int stepper(double** T, double** T2, const int nx, const double dx, const double dt, const int ncols, const int rank)
 {
     /*Step things forward one step in time.*/
 
@@ -76,24 +82,12 @@ int stepper(double** T, double** T2, const int nx, const double dx, const double
     return 0;
 }
 
-[[noreturn]] void initial_message(char* name, int rank)
-{
-    //runs if the wrong number of input parameters was entered
-    if (rank == 0) {
-        printf("Usage: %s nx [steps] \n", name);
-        printf("  nx:    grid size on a side\n         final grid will be 2-d sized nx by nx\n");
-        printf("  steps: (optional) numer of steps of the simulation. If not given, will be determined automatically");
-    }
-    MPI_Finalize();
-    exit(1);
-}
-
-string get_time(void)
+static string get_time(void)
 {
     return date::format("[%T]", std::chrono::system_clock::now());
 }
 
-void write_to_file(double** T_arr, int ncols, int nx, const string& outputfilename, bool append)
+static void write_to_file(double** T_arr, int ncols, int nx, const string& outputfilename, bool append)
 {
     auto mode = append ? ios_base::app : ios_base::trunc;
     ofstream ofile(outputfilename, mode);
@@ -114,7 +108,7 @@ void write_to_file(double** T_arr, int ncols, int nx, const string& outputfilena
     }
 }
 
-void read_from_file(double** T_arr, int ncols, int nx, const string& inputfile, int rank)
+static void read_from_file(double** T_arr, int ncols, int nx, const string& inputfile, int rank)
 {
     ifstream ifile(inputfile);
     ifile.exceptions(fstream::failbit | fstream::badbit);
@@ -136,7 +130,7 @@ void read_from_file(double** T_arr, int ncols, int nx, const string& inputfile, 
     }
 }
 
-void zeroize_matrix(double** T_arr, int ncols, int nx)
+static void zeroize_matrix(double** T_arr, int ncols, int nx)
 {
     for (int i = 0; i < nx; i++) {
         for (int j = 1; j < (ncols + 2 - 1); j++) {
@@ -191,7 +185,7 @@ int main(int argc, char* argv[])
     double** T_arr_2; /*This will be used to calculate the new T values at each time step while keeping the old values in T_arr for calculation purposes*/
     double** T_pointer_temp; /*To be used to switch the pointers T_arr and T_arr_2*/
     const double fraction_of_maximum_time_step = 0.8; /*This is the fraction of the largest numerically stable timestep, calculated below, that we want our dt to actually be.  Keeping it some sane fraction will allow us to get an exact fraction of the maximum time we want. In units of kappa*/
-    const double dx = M_PI / (double) nx; //physical size of grid cells
+    const double dx = M_PI / static_cast<double>(nx); //physical size of grid cells
     const double dt = dx * dx / 4.0 * fraction_of_maximum_time_step; /*This is the time step size, in units of kappa, which later cancel*/
     const double tmax = (0.5 * M_PI * M_PI); //maximum time to run
     const int ntstep = req_steps.value_or(static_cast<int>(tmax / dt)); //number of time steps
@@ -202,8 +196,8 @@ int main(int argc, char* argv[])
     const int tag1 = 1; //tags for the MPI
     const int tag2 = 2; //tags for the MPI
 
-    T_arr = grid_creator((size_t) nx, (size_t)(ncols + 2)); //allocate memory for the temperature grids.
-    T_arr_2 = grid_creator((size_t) nx, (size_t)(ncols + 2)); //We use ncols+2 to provide some ghost cells for holding the boundary temperature values
+    T_arr = grid_creator(static_cast<size_t>(nx), static_cast<size_t>(ncols + 2)); //allocate memory for the temperature grids.
+    T_arr_2 = grid_creator(static_cast<size_t>(nx), static_cast<size_t>(ncols + 2)); //We use ncols+2 to provide some ghost cells for holding the boundary temperature values
 
     //Now initialize the array to the initial conditions
     //Our initial conditions are to have T=0 everywhere
@@ -222,7 +216,7 @@ int main(int argc, char* argv[])
 
     for (int i = 0; i < ntstep; i++) {
         if (rank == 0 && ntstep >= 200 && i % (ntstep / 200) == 0) {
-            double progress = 100.0 * i / (double) ntstep;
+            double progress = 100.0 * i / static_cast<double>(ntstep);
             printf("%s Progress: %.1f%%"
                    ". Computing step %d/%d\n",
                 get_time().c_str(), progress, i, ntstep);
