@@ -5,10 +5,12 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
-#include <mpi.h>
 
 #include "date.h"
 #include "CLI11.hpp"
+
+// has to be last because AMPI does #define exit(...)
+#include <mpi.h>
 
 using namespace std;
 
