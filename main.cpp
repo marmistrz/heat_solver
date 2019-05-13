@@ -2,20 +2,19 @@
 
 #include <cassert>
 #include <cmath>
-#include <optional>
 #include <fstream>
 #include <iomanip>
 #include <limits>
-#include <sstream>
 #include <mpi.h>
+#include <optional>
+#include <sstream>
 
-#include "date.h"
 #include "CLI11.hpp"
-
+#include "date.h"
 
 using namespace std;
 
-#define _unused(x) ((void) (x))
+#define _unused(x) ((void)(x))
 
 static double T_x_0_boundaryconditions(int xi, int nx)
 {
@@ -199,8 +198,10 @@ int main(int argc, char* argv[])
     const int tag1 = 1; //tags for the MPI
     const int tag2 = 2; //tags for the MPI
 
-    T_arr = grid_creator(static_cast<size_t>(nx), static_cast<size_t>(ncols + 2)); //allocate memory for the temperature grids.
-    T_arr_2 = grid_creator(static_cast<size_t>(nx), static_cast<size_t>(ncols + 2)); //We use ncols+2 to provide some ghost cells for holding the boundary temperature values
+    const size_t nxsize = static_cast<size_t>(nx);
+
+    T_arr = grid_creator(nxsize, static_cast<size_t>(ncols + 2)); //allocate memory for the temperature grids.
+    T_arr_2 = grid_creator(nxsize, static_cast<size_t>(ncols + 2)); //We use ncols+2 to provide some ghost cells for holding the boundary temperature values
 
     //Now initialize the array to the initial conditions
     //Our initial conditions are to have T=0 everywhere
@@ -217,6 +218,11 @@ int main(int argc, char* argv[])
         zeroize_matrix(T_arr, ncols, nx);
     }
 
+    double* right_pass = new double[nxsize];
+    double* left_pass = new double[nxsize];
+    double* right_accept = new double[nxsize];
+    double* left_accept = new double[nxsize];
+
     for (int i = 0; i < ntstep; i++) {
         if (rank == 0 && ntstep >= 200 && i % (ntstep / 200) == 0) {
             double progress = 100.0 * i / static_cast<double>(ntstep);
@@ -224,9 +230,8 @@ int main(int argc, char* argv[])
                    ". Computing step %d/%d\n",
                 get_time().c_str(), progress, i, ntstep);
         }
-        //pass the boundary columns between the various threads, this arrays are useful to do that
-        double right_pass[nx], left_pass[nx], right_accept[nx], left_accept[nx];
 
+        //pass the boundary columns between the processes
         for (int l = 0; l < nx; l++) {
             left_pass[l] = T_arr[l][1]; //pass left side of array to previous processor
             right_pass[l] = T_arr[l][ncols + 2 - 1 - 1]; //pass the right side of array to next processor
