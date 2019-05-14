@@ -239,11 +239,11 @@ int main(int argc, char* argv[])
         }
 
         /*MPI code to send and receive the appropriate boundary cells*/
-        MPI_Isend(&left_pass, nx, MPI_DOUBLE, prev, tag1, MPI_COMM_WORLD, &reqs[0]);
-        MPI_Isend(&right_pass, nx, MPI_DOUBLE, next, tag2, MPI_COMM_WORLD, &reqs[1]);
+        MPI_Isend(left_pass, nx, MPI_DOUBLE, prev, tag1, MPI_COMM_WORLD, &reqs[0]);
+        MPI_Isend(right_pass, nx, MPI_DOUBLE, next, tag2, MPI_COMM_WORLD, &reqs[1]);
 
-        MPI_Irecv(&left_accept, nx, MPI_DOUBLE, prev, tag2, MPI_COMM_WORLD, &reqs[2]);
-        MPI_Irecv(&right_accept, nx, MPI_DOUBLE, next, tag1, MPI_COMM_WORLD, &reqs[3]);
+        MPI_Irecv(left_accept, nx, MPI_DOUBLE, prev, tag2, MPI_COMM_WORLD, &reqs[2]);
+        MPI_Irecv(right_accept, nx, MPI_DOUBLE, next, tag1, MPI_COMM_WORLD, &reqs[3]);
 
         /*Wait until all necessary memory is sent and received*/
         MPI_Waitall(4, reqs, stats);
