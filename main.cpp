@@ -172,7 +172,7 @@ int main(int argc, char* argv[])
     } catch (const CLI::ParseError& e) {
         return app.exit(e);
     }
-    if (noresults) {
+    if (noresults && rank == 0) {
         cerr << "WARNING: results won't be written after the computation, as requested\n";
     }
 
@@ -305,7 +305,9 @@ int main(int argc, char* argv[])
             }
         }
     } else {
-        cout << "Skipped writing the results, as requested\n";
+        if (rank == 0) {
+            cout << "Skipped writing the results, as requested\n";
+        }
     }
 
     MPI_Finalize();
