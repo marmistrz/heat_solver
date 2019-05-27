@@ -160,10 +160,12 @@ int main(int argc, char* argv[])
     optional<int> req_steps;
     optional<string> initial;
     int nx;
+    bool noresults = false;
     CLI::App app;
     app.add_option("--size", nx, "size of the grid")->required(true);
     app.add_option("--initial", initial, "inital conditions");
     app.add_option("--steps", req_steps, "steps to simulate");
+    app.add_flag("--noresults", noresults, "don't write the results after the computation, do a purely profiling run");
 
     try {
         app.parse(argc, argv);
@@ -275,28 +277,32 @@ int main(int argc, char* argv[])
     printf("numtasks: %d, rank: %d, nx: %d, time: %lf\n", numtasks, rank, nx, MPI_Wtime() - start_time);
 
     // Write the outputs
-    ostringstream fname_ss;
-    fname_ss << "heat_mpi." << nx << "." << numtasks << ".output.dat";
-    string filename = fname_ss.str();
+    if (!noresults) {
+        ostringstream fname_ss;
+        fname_ss << "heat_mpi." << nx << "." << numtasks << ".output.dat";
+        string filename = fname_ss.str();
 
-    if (rank == 0) {
-        try {
-            write_to_file(T_arr, ncols, nx, filename, false);
-            for (int rank2 = 1; rank2 < numtasks; ++rank2) {
-                for (int i = 0; i < nx; ++i) {
-                    MPI_Recv(T_arr[i], ncols, MPI_DOUBLE, rank2, 0, MPI_COMM_WORLD, nullptr);
+        if (rank == 0) {
+            try {
+                write_to_file(T_arr, ncols, nx, filename, false);
+                for (int rank2 = 1; rank2 < numtasks; ++rank2) {
+                    for (int i = 0; i < nx; ++i) {
+                        MPI_Recv(T_arr[i], ncols, MPI_DOUBLE, rank2, 0, MPI_COMM_WORLD, nullptr);
+                    }
+                    write_to_file(T_arr, ncols, nx, filename, true);
                 }
-                write_to_file(T_arr, ncols, nx, filename, true);
+            } catch (const exception& e) {
+                cerr << "Error reading file " << filename << ": " << e.what() << "\n";
+                exit(1);
             }
-        } catch (const exception& e) {
-            cerr << "Error reading file " << filename << ": " << e.what() << "\n";
-            exit(1);
-        }
 
-    } else {
-        for (int i = 0; i < nx; ++i) {
-            MPI_Send(T_arr[i], ncols, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        } else {
+            for (int i = 0; i < nx; ++i) {
+                MPI_Send(T_arr[i], ncols, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+            }
         }
+    } else {
+        cout << "Skipped writing the results, as requested\n";
     }
 
     MPI_Finalize();
