@@ -172,6 +172,9 @@ int main(int argc, char* argv[])
     } catch (const CLI::ParseError& e) {
         return app.exit(e);
     }
+    if (noresults) {
+        cerr << "WARNING: results won't be written after the computation, as requested\n";
+    }
 
     if (rank == 0 && nx % numtasks != 0) {
         /*Make sure the required grid size splits evenly between the number of processors*/
