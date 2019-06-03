@@ -228,6 +228,14 @@ int main(int argc, char* argv[])
     double* right_accept = new double[nxsize];
     double* left_accept = new double[nxsize];
 
+#ifdef AMPI
+    AMPI_Register_just_migrated([] {
+        int rank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        cout << "Rank " << rank << "migrated\n";
+    });
+#endif
+
     for (int i = 0; i < ntstep; i++) {
         if (rank == 0 && ntstep >= 200 && i % (ntstep / 200) == 0) {
             double progress = 100.0 * i / static_cast<double>(ntstep);
@@ -274,6 +282,11 @@ int main(int argc, char* argv[])
         T_pointer_temp = T_arr_2;
         T_arr_2 = T_arr;
         T_arr = T_pointer_temp;
+#ifdef AMPI
+        if (i % 10 == 0) {
+            AMPI_Migrate(AMPI_INFO_LB_ASYNC);
+        }
+#endif
     }
 
     //Print how long this run took, for this rank
