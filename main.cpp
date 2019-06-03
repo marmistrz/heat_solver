@@ -284,6 +284,7 @@ int main(int argc, char* argv[])
         T_arr = T_pointer_temp;
 #ifdef AMPI
         if (i % 10 == 0) {
+            cout << "Trying to migrate...\n";
             AMPI_Migrate(AMPI_INFO_LB_ASYNC);
         }
 #endif
